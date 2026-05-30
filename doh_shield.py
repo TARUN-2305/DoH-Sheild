@@ -50,6 +50,18 @@ class DoHShieldAddon:
             conn_id = flow.client_conn.id
             ts = time.time()
             content = flow.request.content or b''
+            
+            # If content is empty and it's a GET request, check the dns query parameter
+            if not content and flow.request.method == 'GET':
+                dns_param = flow.request.query.get('dns')
+                if dns_param:
+                    import base64
+                    dns_param += '=' * (-len(dns_param) % 4)
+                    try:
+                        content = base64.urlsafe_b64decode(dns_param)
+                    except Exception:
+                        pass
+                        
             sz = len(content)
             
             # Parse requested domain name for visualization/dashboard

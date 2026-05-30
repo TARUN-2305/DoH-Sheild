@@ -23,6 +23,9 @@ fi
 OUTPUT_FILE="defended_dataset.csv"
 LOG_FILE="stats.json"
 PROXY="http://127.0.0.1:8080"
+export https_proxy="$PROXY"
+export http_proxy="$PROXY"
+export all_proxy="$PROXY"
 VISITS_PER_SITE=10
 DELAY_BETWEEN_VISITS=3  # seconds
 
@@ -81,7 +84,7 @@ echo ""
 echo "site,visit,cluster_id,dummy_count,overhead_pct,formal_bound,timestamp" > "$OUTPUT_FILE"
 
 # Ensure proxy is running
-if ! curl -s --proxy "$PROXY" https://example.com -o /dev/null --max-time 5; then
+if ! curl -k -s --proxy "$PROXY" https://example.com -o /dev/null --max-time 5; then
     echo "❌ Proxy not responding at $PROXY"
     echo "   Please start the proxy in another terminal with: ./run.sh"
     exit 1
@@ -107,11 +110,13 @@ else:
     print(0)
 ")
 
-        # Make request through proxy to trigger DoH resolution
-        curl -s \
+        # Craft base64url wire format DNS query for the site
+        ENCODED_QUERY=$(python3 -c "import dns.message, base64; msg = dns.message.make_query('$site', 1); print(base64.urlsafe_b64encode(msg.to_wire()).decode('utf-8').rstrip('='))")
+
+        # Make direct DoH GET query through the proxy to trigger real DoH session morphing
+        curl -k -s \
             --proxy "$PROXY" \
-            --max-time 10 \
-            "https://$site" \
+            "https://cloudflare-dns.com/dns-query?dns=$ENCODED_QUERY" \
             -o /dev/null 2>/dev/null || true
 
         # Wait for DoH-Shield idle flush (2.0s timeout + buffer)
