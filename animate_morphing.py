@@ -166,14 +166,19 @@ def main():
         # Fix layouts
         plt.tight_layout()
         
-    print("[*] Building animated GIF...")
-    ani = animation.FuncAnimation(fig, update, frames=total_frames, interval=150)
-    ani.save('doh_shield_morphing.gif', writer='pillow', fps=7)
-    plt.close()
-    
-    print("[+] Successfully generated: doh_shield_morphing.gif")
-    print(f"    - Dimensions: 1500x600 px")
-    print(f"    - File Size: {os.path.getsize('doh_shield_morphing.gif') / 1024:.1f} KB")
+    import sys
+    if '--show' in sys.argv:
+        print("[*] Launching interactive real-time visualization window...")
+        ani = animation.FuncAnimation(fig, update, frames=total_frames, interval=150, repeat=True)
+        plt.show()
+    else:
+        print("[*] Building animated GIF...")
+        ani = animation.FuncAnimation(fig, update, frames=total_frames, interval=150)
+        ani.save('doh_shield_morphing.gif', writer='pillow', fps=7)
+        plt.close()
+        print("[+] Successfully generated: doh_shield_morphing.gif")
+        print(f"    - Dimensions: 1500x600 px")
+        print(f"    - File Size: {os.path.getsize('doh_shield_morphing.gif') / 1024:.1f} KB")
 
 if __name__ == '__main__':
     main()

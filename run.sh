@@ -39,17 +39,22 @@ echo "[*] Spawning mitmproxy DoH Interception Addon on port 8080..."
 mitmdump -s doh_shield.py --listen-port 8080 --ssl-insecure >/dev/null 2>&1 &
 MITM_PID=$!
 
-# Ensure mitmproxy is cleaned up when the script exits
+# Spin up a lightweight Python HTTP server on port 8000 to serve the web dashboard and JSON API
+echo "[*] Launching HTTP Web Server on port 8000..."
+python -m http.server 8000 --bind 127.0.0.1 >/dev/null 2>&1 &
+HTTP_PID=$!
+
+# Ensure background processes are cleaned up when the script exits
 cleanup() {
-    echo -e "\n[*] Terminating mitmproxy (PID: $MITM_PID)..."
-    kill $MITM_PID 2>/dev/null
-    wait $MITM_PID 2>/dev/null
+    echo -e "\n[*] Terminating background processes (mitmproxy PID: $MITM_PID, HTTP Server PID: $HTTP_PID)..."
+    kill $MITM_PID $HTTP_PID 2>/dev/null
+    wait $MITM_PID $HTTP_PID 2>/dev/null
     rm -f stats.json stats.json.tmp
     echo "🛡️ DoH-Shield stopped successfully. Goodbye!"
 }
 trap cleanup INT TERM EXIT
 
-# Wait a moment for mitmproxy to bind to port 8080
+# Wait a moment for services to bind to ports
 sleep 1.5
 
 # Double check if mitmproxy started successfully
@@ -57,6 +62,13 @@ if ! kill -0 $MITM_PID 2>/dev/null; then
     echo "[!] mitmproxy failed to start! Port 8080 might already be in use."
     exit 1
 fi
+
+# Print dashboard address
+echo "=================================================="
+echo "🛡️  DoH-Shield is ACTIVE and PROTECTING your traffic!"
+echo "🌐 Web Dashboard: http://127.0.0.1:8000/web_dashboard.html"
+echo "=================================================="
+sleep 1.0
 
 # Start our beautiful rich dashboard in the foreground
 echo "[*] Launching real-time terminal dashboard..."
