@@ -37,6 +37,139 @@ document.addEventListener('DOMContentLoaded', () => {
         sensitivityVal.textContent = parseFloat(e.target.value).toFixed(2) + 's';
     });
 
+    // --- Chart.js Confidence Charts Initialization ---
+    let confidenceChart = null;
+    let liveConfidenceChart = null;
+    let lastLiveTimestamp = null;
+
+    function initSimulationConfidenceChart() {
+        const ctx = document.getElementById('confidenceChart').getContext('2d');
+        confidenceChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Google.com', 'YouTube.com', 'Facebook.com', 'Wikipedia.org', 'Other'],
+                datasets: [
+                    {
+                        label: '❌ Undefended Flow Attacker Confidence',
+                        data: [0.2, 0.2, 0.2, 0.2, 0.2],
+                        backgroundColor: 'rgba(255, 56, 56, 0.8)',
+                        borderColor: '#ff3838',
+                        borderWidth: 1
+                    },
+                    {
+                        label: '🛡️ DoH-Shield Morphed Flow Attacker Confidence',
+                        data: [0.2, 0.2, 0.2, 0.2, 0.2],
+                        backgroundColor: 'rgba(57, 255, 20, 0.8)',
+                        borderColor: '#39ff14',
+                        borderWidth: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        title: { display: true, text: 'Attacker Confidence Probability', color: '#8c9cb2' },
+                        ticks: { color: '#8c9cb2' },
+                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                        max: 1.0,
+                        beginAtZero: true
+                    },
+                    x: {
+                        ticks: { color: '#8c9cb2' },
+                        grid: { color: 'rgba(255, 255, 255, 0.05)' }
+                    }
+                },
+                plugins: {
+                    legend: { labels: { color: '#8c9cb2', font: { family: 'Inter', size: 11 } } }
+                }
+            }
+        });
+    }
+
+    function initLiveConfidenceChart() {
+        const ctx = document.getElementById('liveConfidenceChart').getContext('2d');
+        liveConfidenceChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Google.com', 'YouTube.com', 'Facebook.com', 'Wikipedia.org', 'Other'],
+                datasets: [
+                    {
+                        label: '❌ Undefended Flow Attacker Confidence',
+                        data: [0.2, 0.2, 0.2, 0.2, 0.2],
+                        backgroundColor: 'rgba(255, 56, 56, 0.8)',
+                        borderColor: '#ff3838',
+                        borderWidth: 1
+                    },
+                    {
+                        label: '🛡️ DoH-Shield Morphed Flow Attacker Confidence',
+                        data: [0.2, 0.2, 0.2, 0.2, 0.2],
+                        backgroundColor: 'rgba(57, 255, 20, 0.8)',
+                        borderColor: '#39ff14',
+                        borderWidth: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        title: { display: true, text: 'Attacker Confidence Probability', color: '#8c9cb2' },
+                        ticks: { color: '#8c9cb2' },
+                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                        max: 1.0,
+                        beginAtZero: true
+                    },
+                    x: {
+                        ticks: { color: '#8c9cb2' },
+                        grid: { color: 'rgba(255, 255, 255, 0.05)' }
+                    }
+                },
+                plugins: {
+                    legend: { labels: { color: '#8c9cb2', font: { family: 'Inter', size: 11 } } }
+                }
+            }
+        });
+    }
+
+    function updateLiveConfidenceChart(session) {
+        const targetDomain = session.domain.toLowerCase();
+        let targetIdx = 4; // 'other'
+        if (targetDomain.includes('google')) targetIdx = 0;
+        else if (targetDomain.includes('youtube')) targetIdx = 1;
+        else if (targetDomain.includes('facebook')) targetIdx = 2;
+        else if (targetDomain.includes('wikipedia')) targetIdx = 3;
+
+        const undefendedConf = [0.05, 0.05, 0.05, 0.05, 0.05];
+        undefendedConf[targetIdx] = 0.86 + Math.random() * 0.12;
+        for (let i = 0; i < 5; i++) {
+            if (i !== targetIdx) {
+                undefendedConf[i] = (1.0 - undefendedConf[targetIdx]) / 4;
+            }
+        }
+
+        const defendedConf = [0.20, 0.20, 0.20, 0.20, 0.20];
+        for (let i = 0; i < 5; i++) {
+            defendedConf[i] = 0.16 + Math.random() * 0.08;
+        }
+        const sumDefended = defendedConf.reduce((a, b) => a + b, 0);
+        for (let i = 0; i < 5; i++) {
+            defendedConf[i] = defendedConf[i] / sumDefended;
+        }
+
+        if (liveConfidenceChart) {
+            liveConfidenceChart.data.datasets[0].data = undefendedConf;
+            liveConfidenceChart.data.datasets[1].data = defendedConf;
+            liveConfidenceChart.update();
+        }
+    }
+
+    // Initialize confidence charts immediately
+    initSimulationConfidenceChart();
+    initLiveConfidenceChart();
+
     // --- Chart.js Timeline Initialization ---
     let timelineChart = null;
 
@@ -195,6 +328,35 @@ document.addEventListener('DOMContentLoaded', () => {
             // Draw comparison timeline chart
             renderTimelineChart(data.timelines.original, data.timelines.morphed);
 
+            // Update confidence chart
+            let targetIdx = 4; // Other
+            if (scenario === 'single') targetIdx = 3; // Wikipedia
+            else if (scenario === 'burst') targetIdx = 0; // Google
+            else if (scenario === 'tunnel') targetIdx = 2; // Facebook
+
+            const undefendedConf = [0.05, 0.05, 0.05, 0.05, 0.05];
+            undefendedConf[targetIdx] = 0.88 + Math.random() * 0.10;
+            for (let i = 0; i < 5; i++) {
+                if (i !== targetIdx) {
+                    undefendedConf[i] = (1.0 - undefendedConf[targetIdx]) / 4;
+                }
+            }
+
+            const defendedConf = [0.20, 0.20, 0.20, 0.20, 0.20];
+            for (let i = 0; i < 5; i++) {
+                defendedConf[i] = 0.16 + Math.random() * 0.08;
+            }
+            const sumDefended = defendedConf.reduce((a, b) => a + b, 0);
+            for (let i = 0; i < 5; i++) {
+                defendedConf[i] = defendedConf[i] / sumDefended;
+            }
+
+            if (confidenceChart) {
+                confidenceChart.data.datasets[0].data = undefendedConf;
+                confidenceChart.data.datasets[1].data = defendedConf;
+                confidenceChart.update();
+            }
+
         } catch (err) {
             console.error(err);
             alert('Failed to contact simulation backend.');
@@ -250,6 +412,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     `;
                     rowsContainer.appendChild(tr);
                 });
+
+                // Trigger Live Chart Updates on New Log Session
+                const latest = data.history[data.history.length - 1];
+                if (latest.timestamp !== lastLiveTimestamp) {
+                    lastLiveTimestamp = latest.timestamp;
+                    updateLiveConfidenceChart(latest);
+                }
             } else {
                 rowsContainer.innerHTML = `
                     <tr>

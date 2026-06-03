@@ -26,36 +26,40 @@ rm -f stats.json stats.json.tmp
 
 # Run verification tests on core components before starting the proxy
 echo "[*] Running component verification checks..."
-python feature_extractor.py
-python morph_engine.py
+python verify_shield.py
 if [ $? -ne 0 ]; then
-    echo "[!] Component verification check failed! Please review feature_extractor.py or morph_engine.py."
+    echo "[!] Component verification check failed! Please review verify_shield.py."
     exit 1
 fi
 echo "[+] Verification successful! Core components are healthy."
+
+# Spin up local mock DoH resolver on port 8081
+echo "[*] Spawning local mock DoH resolver on port 8081..."
+python mock_doh_resolver.py >/dev/null 2>&1 &
+RESOLVER_PID=$!
 
 # Spin up mitmproxy in the background
 echo "[*] Spawning mitmproxy DoH Interception Addon on port 8080..."
 mitmdump -s doh_shield.py --listen-port 8080 --ssl-insecure >/dev/null 2>&1 &
 MITM_PID=$!
 
-# Spin up a lightweight Python HTTP server on port 8000 to serve the web dashboard and JSON API
-echo "[*] Launching HTTP Web Server on port 8000..."
-python -m http.server 8000 --bind 127.0.0.1 >/dev/null 2>&1 &
-HTTP_PID=$!
+# Spin up interactive web server on port 8082
+echo "[*] Spawning interactive web portal on port 8082..."
+python web_server.py >/dev/null 2>&1 &
+WEB_PID=$!
 
 # Ensure background processes are cleaned up when the script exits
 cleanup() {
-    echo -e "\n[*] Terminating background processes (mitmproxy PID: $MITM_PID, HTTP Server PID: $HTTP_PID)..."
-    kill $MITM_PID $HTTP_PID 2>/dev/null
-    wait $MITM_PID $HTTP_PID 2>/dev/null
+    echo -e "\n[*] Terminating background processes (mitmproxy PID: $MITM_PID, Resolver PID: $RESOLVER_PID, Web Server PID: $WEB_PID)..."
+    kill $MITM_PID $RESOLVER_PID $WEB_PID 2>/dev/null
+    wait $MITM_PID $RESOLVER_PID $WEB_PID 2>/dev/null
     rm -f stats.json stats.json.tmp
     echo "🛡️ DoH-Shield stopped successfully. Goodbye!"
 }
 trap cleanup INT TERM EXIT
 
 # Wait a moment for services to bind to ports
-sleep 1.5
+sleep 2.5
 
 # Double check if mitmproxy started successfully
 if ! kill -0 $MITM_PID 2>/dev/null; then
@@ -63,10 +67,22 @@ if ! kill -0 $MITM_PID 2>/dev/null; then
     exit 1
 fi
 
+# Double check if resolver started successfully
+if ! kill -0 $RESOLVER_PID 2>/dev/null; then
+    echo "[!] Local mock resolver failed to start! Port 8081 might already be in use."
+    exit 1
+fi
+
+# Double check if web server started successfully
+if ! kill -0 $WEB_PID 2>/dev/null; then
+    echo "[!] Web portal server failed to start! Port 8082 might already be in use."
+    exit 1
+fi
+
 # Print dashboard address
 echo "=================================================="
 echo "🛡️  DoH-Shield is ACTIVE and PROTECTING your traffic!"
-echo "🌐 Web Dashboard: http://127.0.0.1:8000/web_dashboard.html"
+echo "🌐 Web Control Portal: http://127.0.0.1:8082"
 echo "=================================================="
 sleep 1.0
 

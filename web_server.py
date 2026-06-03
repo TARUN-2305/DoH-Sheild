@@ -52,6 +52,7 @@ def index():
 def serve_static(path):
     return send_from_directory('web_frontend', path)
 
+@app.route('/stats.json', methods=['GET'])
 @app.route('/api/stats', methods=['GET'])
 def get_stats():
     """Reads the local stats.json file and returns its content"""

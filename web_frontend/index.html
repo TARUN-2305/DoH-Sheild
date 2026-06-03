@@ -96,9 +96,14 @@
                         </div>
                     </div>
 
-                    <!-- Timeline Chart Wrapper -->
-                    <div class="chart-wrapper">
-                        <canvas id="timelineChart"></canvas>
+                    <!-- Charts Wrapper (Timeline + Confidence) -->
+                    <div class="charts-container">
+                        <div class="chart-wrapper">
+                            <canvas id="timelineChart"></canvas>
+                        </div>
+                        <div class="chart-wrapper">
+                            <canvas id="confidenceChart"></canvas>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -136,6 +141,15 @@
                 <div class="glass-panel kpi-card">
                     <span class="kpi-label">Guaranteed Privacy Bound</span>
                     <span id="live-privacy-bound" class="kpi-val text-green">37.08%</span>
+                </div>
+            </div>
+
+            <!-- Live Charts Panel -->
+            <div class="glass-panel live-charts-panel">
+                <h2>Attacker Confidence Evaluation</h2>
+                <p class="subtitle">Real-time Deep Learning Website Fingerprinting (WF) Classifier prediction comparison (Undefended vs. Defended)</p>
+                <div class="chart-wrapper live-chart-wrapper">
+                    <canvas id="liveConfidenceChart"></canvas>
                 </div>
             </div>
 

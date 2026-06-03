@@ -337,6 +337,27 @@ input[type="range"]::-webkit-slider-thumb:hover {
     padding: 15px;
 }
 
+.charts-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-top: 25px;
+}
+
+.live-charts-panel {
+    margin-bottom: 30px;
+}
+
+.live-chart-wrapper {
+    height: 350px;
+}
+
+@media (max-width: 768px) {
+    .charts-container {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* Neon Text Helpers */
 .text-cyan { color: var(--neon-cyan); text-shadow: 0 0 10px rgba(0, 242, 254, 0.2); }
 .text-magenta { color: var(--neon-magenta); text-shadow: 0 0 10px rgba(255, 0, 127, 0.2); }
