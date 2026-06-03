@@ -7,13 +7,14 @@ DoH-Shield is a mathematically backed, client-side DNS-over-HTTPS (DoH) traffic 
 ## 📖 Table of Contents
 1. [Project Overview](#-project-overview)
 2. [Threat Model & Core Architecture](#-threat-model--core-architecture)
-3. [Guarantees & Privacy Bounds](#-guarantees--privacy-bounds)
-4. [File Directory Structure](#-file-directory-structure)
-5. [Installation & Setup](#-installation--setup)
-6. [End-to-End Training (Google Colab)](#-end-to-end-training-google-colab)
-7. [Running the System](#-running-the-system)
-8. [System Verification & Self-Tests](#-system-verification--self-tests)
-9. [References](#-references)
+3. [Visual Comparisons & Flow Diagrams](#-visual-comparisons--flow-diagrams)
+4. [Guarantees & Privacy Bounds](#-guarantees--privacy-bounds)
+5. [File Directory Structure](#-file-directory-structure)
+6. [Installation & Setup](#-installation--setup)
+7. [End-to-End Training (Google Colab)](#-end-to-end-training-google-colab)
+8. [Running the System](#-running-the-system)
+9. [System Verification & Self-Tests](#-system-verification--self-tests)
+10. [References](#-references)
 
 ---
 
@@ -29,33 +30,44 @@ Classifiers like **Random Forest** and **Deep Fingerprinting CNNs** (Sirinam et 
 
 **DoH-Shield** intercepts local browser traffic, extracts 29 statistical flow features in real-time, maps them into unsupervised K-Means clusters, and morphs the flow characteristics toward cluster centroids. It dynamically injects padded dummy DNS queries (using EDNS(0) padding) and adds Laplace timing noise to achieve robust confusion under formal differential privacy limits.
 
+### 🎬 Traffic Morphing Simulation
+The animation below demonstrates a side-by-side simulation of a packet stream: an undefended flow (leaking signatures, causing 99% attacker CNN confidence) vs. a morphed DoH-Shield flow (injected dummies, flattened classifier confidence below 37%).
+
+![DoH-Shield Morphing Simulation](./doh_shield_morphing.gif)
+
 ---
 
 ## 🛠️ Threat Model & Core Architecture
 
 DoH-Shield operates under a **passive, network-level eavesdropper threat model**. The attacker observes encrypted TLS flows traversing the network path (IPs, packet lengths, direction, and relative arrival times) but cannot decrypt payloads or compromise target servers.
 
-```mermaid
-flowchart TD
-    Browser[🌐 Firefox/Chrome browser] -->|Encrypted DoH Request| Proxy[🛡️ DoH-Shield mitmproxy]
-    Proxy -->|1. Real-time Feature Extraction| FE[📊 Feature Extractor]
-    FE -->|29 statistical features| ME[🧠 Morph Engine]
-    ME -->|2. Scale & Map to KMeans Centroid| Cluster[🎯 Cluster Assignment]
-    Cluster -->|Adaptive Randomization| Offset[🎲 Cluster Key Offset]
-    Offset -->|3. Compute Delays & Dummy Sizes| Plan[📋 Morphing Plan]
-    Plan -->|4. Non-blocking Async Injector| DI[✉️ Dummy Injector]
-    DI -->|EDNS0 Padded Queries| CF[☁️ Cloudflare Resolver]
-    Plan -->|5. Calibrate Timing Delays| Delay[⏳ Laplace timing noise]
-    Delay -->|Morphed Traffic Flow| Attacker[🔍 Passive Eavesdropper]
-    Attacker -->|Classifier F1 < 0.15| Failure[❌ Attack Failed]
-```
+### System Architecture Diagram
+The layout below illustrates how the Client Browser, Local Proxy, and Upstream Resolvers interface, detailing the sub-modules responsible for feature extraction, morphing, EDNS(0) padding, and DP timing noise:
+
+![DoH-Shield System Architecture](./doh_shield_sys_diagram.png)
 
 ### Core Components
 1. **Real-time Feature Extractor (`feature_extractor.py`)**: Computes 29 statistical descriptors (mean, median, mode, variance, std dev, skewness, and coefficients of variation for lengths and timestamps) on sliding packet trace windows.
 2. **KMeans Morph Engine (`morph_engine.py`)**: Loads pre-trained KMeans clusters and scaler. Maps the incoming trace to the nearest cluster centroid and applies **Adaptive Session-Key Cluster Randomization** to deter static classification models.
 3. **EDNS(0) Dummy Injector (`dummy_injector.py`)**: Crafts compliant DNS queries asynchronously using `dnspython` and injects exact EDNS(0) padding to pad queries to precise target sizes.
 4. **MITM Interception Addon (`doh_shield.py`)**: Integrates into the `mitmproxy` pipeline, detects inactivity timeouts (2.0s), and coordinates feature extraction and dummy generation.
-5. **IPC Stats Dashboard (`dashboard.py`)**: A gorgeous, real-time command-line interface styled with the `rich` library that monitors overhead, active queries, injected dummies, and session logs.
+5. **Real-Time Web Telemetry Dashboard (`web_dashboard.html`)**: A gorgeous, real-time web interface served locally on port `8000` using Chart.js to plot timelines, overhead dials, and attacker confidence graphs.
+6. **IPC Terminal Stats Dashboard (`dashboard.py`)**: A real-time command-line interface styled with the `rich` library that monitors overhead, active queries, injected dummies, and session logs.
+
+---
+
+## 📊 Visual Comparisons & Flow Diagrams
+The diagrams below compare how packet size blocks and request timings travel when undefended vs. when protected by DoH-Shield:
+
+### Scenario A: Communication WITHOUT DoH-Shield (Vulnerable)
+Original queries generate highly distinct packet size distributions (scattered blocks) and raw timing gaps. An eavesdropper uses these to reconstruct the website signature with 99% classification accuracy.
+
+![Undefended DoH Flow](./undefended_doh_flow.png)
+
+### Scenario B: Communication WITH DoH-Shield (Protected)
+The local proxy intercepts queries, pads them using RFC 6891 EDNS(0) options to match cluster mode sizes, injects dummy packets to pad session volume, and applies Laplace timing jitter. The attacker's AI classifier is completely confused.
+
+![Defended DoH Flow](./defended_doh_flow.png)
 
 ---
 
@@ -82,6 +94,7 @@ DoH-Sheild/
 ├── cluster_scaler.pkl             # Standalone scaler for KMeans mapping
 ├── collect_defended.sh            # Live automation evaluation collector
 ├── dashboard.py                   # Rich CLI live visual stats monitor
+├── web_dashboard.html             # Chart.js-based dynamic web telemetry dashboard
 ├── df_attack_model_best.pt        # Trained Deep Fingerprinting CNN weights
 ├── doh_shield.py                  # mitmproxy interception addon logic
 ├── DoHShield_Complete_Training.ipynb # Unified training notebook for Colab
@@ -91,8 +104,15 @@ DoH-Sheild/
 ├── feature_scaler.pkl             # Baseline standard feature scaler
 ├── label_encoder.pkl              # Attack model label encoder
 ├── morph_engine.py                # Obfuscation plan and timing noise injector
+├── animate_morphing.py            # Code-based Matplotlib visualization animator
+├── presentation_guide.md          # Comprehensive viva preparation & demo guide
+├── doh_shield_sys_diagram.png     # Figma-style local proxy system diagram
+├── doh_shield_conceptual_diagram.png # High-level raw-to-morphed mapping diagram
+├── undefended_doh_flow.png        # Minimal flow chart without DoH-Shield
+├── defended_doh_flow.png          # Minimal flow chart with DoH-Shield
+├── doh_shield_morphing.gif        # Compiled Matplotlib side-by-side animated trace
 ├── README.md                      # Comprehensive system documentation
-├── run.sh                         # Signal-trapped proxy & dashboard starter
+├── run.sh                         # Signal-trapped proxy, dashboard, & HTTP server starter
 ├── top_features_phase3.npy        # ATTACK feature importance indexes
 └── verify_shield.py               # 4-stage automated unit testing suite
 ```
@@ -116,15 +136,17 @@ python3 -m venv venv
 source venv/bin/activate
 
 # Install dependencies
-pip install -r requirements.txt || pip install numpy pandas scikit-learn joblib scipy mitmproxy dnspython scapy rich httpx pyarrow fastparquet
+pip install -r requirements.txt || pip install numpy pandas scikit-learn joblib scipy mitmproxy dnspython scapy rich httpx pyarrow fastparquet matplotlib pillow
 ```
 
-### 2. Configure Browser Proxy
-Route local traffic through mitmproxy:
-1. Open **Firefox** -> **Settings** -> **Network Settings** -> **Settings...**
+### 2. Configure Browser Proxy & SSL CA Trust
+To intercept TLS encrypted HTTPS queries without certificate warnings:
+1. Open **Firefox** -> **Settings** -> search for **Proxy** -> **Settings...**
 2. Choose **Manual proxy configuration**.
-3. Set **HTTP Proxy** to `127.0.0.1` and **Port** to `8080`.
-4. Check **Also use this proxy for HTTPS**.
+3. Set **HTTP Proxy** to `127.0.0.1` and **Port** to `8080`. Check **Also use this proxy for HTTPS**.
+4. Search for **DNS over HTTPS** in Firefox settings, set it to **Max Protection**, and select **Cloudflare** as the provider.
+5. In settings, search for **Certificates** -> click **View Certificates...** -> **Authorities** -> **Import...**
+6. Locate and import `~/.mitmproxy/mitmproxy-ca-cert.pem`, check **Trust this CA to identify websites**, and click **OK**.
 
 ---
 
@@ -144,14 +166,22 @@ If you wish to retrain all attack and defense models using the **CIRA-CIC-DoHBrw
 
 ## 🚀 Running the System
 
-Start the local intercepting proxy and terminal visualizer dashboard with a single signal-trapped shell wrapper:
+Start the local intercepting proxy, the terminal dashboard, and the local web server with a single trapped shell script:
 
 ```bash
 chmod +x run.sh
 ./run.sh
 ```
 
-The script will run component self-tests, spawn the proxy engine on port `8080` in the background, and launch the real-time visual statistics monitor.
+### Viewing the Real-Time Web Telemetry
+Once the proxy starts up, it spins up a local web server on port `8000`. You can open your browser and navigate to:
+👉 **[http://127.0.0.1:8000/web_dashboard.html](http://127.0.0.1:8000/web_dashboard.html)**
+
+### Running the Live Interactive Matplotlib GUI Animation
+To view the animated timeline and attacker CNN confidence curves updating dynamically on your desktop, run the animation script with the interactive show flag:
+```bash
+python animate_morphing.py --show
+```
 
 ---
 
