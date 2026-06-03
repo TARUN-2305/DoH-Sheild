@@ -1,5 +1,13 @@
 # dashboard.py
 import os
+import sys
+
+# Force UTF-8 encoding for standard output on Windows environments
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8')
+
 import json
 import time
 from rich.live import Live
@@ -128,7 +136,7 @@ def main():
         Layout(name="history", ratio=3)
     )
     
-    os.system('clear')
+    os.system('cls' if os.name == 'nt' else 'clear')
     
     with Live(layout, refresh_per_second=4, screen=True) as live:
         while True:

@@ -1,4 +1,12 @@
 # doh_shield.py
+import sys
+
+# Force UTF-8 encoding for standard output/error on Windows environments
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8')
+
 import asyncio
 import time
 import json
@@ -28,10 +36,13 @@ class DoHShieldAddon:
         self.lock = threading.Lock()
         self.stats_file = 'stats.json'
         
-        # Start the idle checker loop in the background
-        asyncio.create_task(self.check_idle_sessions_loop())
         self.save_stats()
         print("🛡️ DoH-Shield Addon Initialized! Listening for DoH traffic...")
+
+    def running(self):
+        print("🚀 DoH-Shield running hook called!")
+        # Start the idle checker loop in the background once mitmproxy is running
+        asyncio.create_task(self.check_idle_sessions_loop())
 
     def save_stats(self):
         """Atomically saves current stats to stats.json for the dashboard to read"""
@@ -47,6 +58,11 @@ class DoHShieldAddon:
     def request(self, flow: http.HTTPFlow):
         # Only intercept DoH requests to Cloudflare or Google
         if 'cloudflare-dns.com' in flow.request.pretty_host or 'dns.google' in flow.request.pretty_host:
+            # Redirect request to the local mock resolver on port 8081
+            flow.request.host = "127.0.0.1"
+            flow.request.port = 8081
+            flow.request.scheme = "http"
+            
             conn_id = flow.client_conn.id
             ts = time.time()
             content = flow.request.content or b''
@@ -98,8 +114,11 @@ class DoHShieldAddon:
             self.save_stats()
 
     def response(self, flow: http.HTTPFlow):
-        if 'cloudflare-dns.com' in flow.request.pretty_host or 'dns.google' in flow.request.pretty_host:
-            conn_id = flow.client_conn.id
+        conn_id = flow.client_conn.id
+        with self.lock:
+            in_session = conn_id in self.sessions
+            
+        if in_session:
             ts = time.time()
             content = flow.response.content or b''
             sz = len(content)
@@ -125,12 +144,17 @@ class DoHShieldAddon:
 
     async def check_idle_sessions_loop(self):
         """Periodically runs to check for idle DNS burst flows and trigger morphing"""
+        print("🔍 check_idle_sessions_loop started!")
         while True:
             await asyncio.sleep(0.5)
             now = time.time()
             to_morph = []
             
             with self.lock:
+                if self.sessions:
+                    print(f"DEBUG: {len(self.sessions)} active sessions", flush=True)
+                    for cid, s in self.sessions.items():
+                        print(f"  session {cid[:8] if cid else 'None'}: packets={len(s['packets'])}, idle={now - s['last_activity']:.1f}s", flush=True)
                 for conn_id, session in list(self.sessions.items()):
                     # If inactive for >= 2.0 seconds and has accumulated queries
                     if now - session['last_activity'] >= 2.0 and len(session['packets']) >= 2:
@@ -140,11 +164,21 @@ class DoHShieldAddon:
                 self.stats['active_sessions'] = len(self.sessions)
                 
             # Perform morphing outside of lock
-            for conn_id, session in to_morph:
-                await self.morph_session(conn_id, session)
-                
-            if to_morph:
-                self.save_stats()
+            try:
+                for conn_id, session in to_morph:
+                    await self.morph_session(conn_id, session)
+                if to_morph:
+                    self.save_stats()
+            except Exception as e:
+                import traceback
+                print(f"❌ Exception in check_idle_sessions_loop morphing: {e}", flush=True)
+                traceback.print_exc()
+
+            if not hasattr(self, '_loop_counter'):
+                self._loop_counter = 0
+            self._loop_counter += 1
+            if self._loop_counter % 10 == 0:
+                print(f"DEBUG: loop heartbeat {self._loop_counter // 10}", flush=True)
 
     async def morph_session(self, conn_id, session):
         """Extracts features, runs the morph engine, and schedules dummy injections"""
@@ -155,7 +189,7 @@ class DoHShieldAddon:
         if len(domains) > 1:
             domain_display += f" (+{len(domains)-1} others)"
             
-        print(f"\n🔮 Flow Inactivity Detected! Morphing session {conn_id[:8]} ({domain_display})...")
+        print(f"\n🔮 Flow Inactivity Detected! Morphing session {conn_id[:8]} ({domain_display})...", flush=True)
         
         # 1. Feature Extraction
         features = extract_features(packets, rt)
@@ -169,13 +203,13 @@ class DoHShieldAddon:
         gaps = plan['timing_gaps']
         bound = plan['theoretical_bound']
         
-        print(f"  -> Extracted features. Original Bytes: {int(features[1] + features[3])} B")
-        print(f"  -> Assigned Target Cluster: {target_cluster}")
-        print(f"  -> Injecting {num_dummies} dummy queries of size {dummy_size} bytes...")
+        print(f"  -> Extracted features. Original Bytes: {int(features[1] + features[3])} B", flush=True)
+        print(f"  -> Assigned Target Cluster: {target_cluster}", flush=True)
+        print(f"  -> Injecting {num_dummies} dummy queries of size {dummy_size} bytes...", flush=True)
         
         # 3. Dummy Injection (Async fire-and-forget)
         if num_dummies > 0:
-            await inject_dummies(num_dummies, dummy_size, gaps)
+            await inject_dummies(num_dummies, dummy_size, gaps, resolver_url='http://127.0.0.1:8081/dns-query')
             
             with self.lock:
                 self.stats['total_dummies'] += num_dummies

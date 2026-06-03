@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🛡️ DoH-Shield Control Portal</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Stylesheet -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="glow-bg"></div>
+
+    <!-- Navigation Header -->
+    <header class="main-header">
+        <div class="logo">
+            <span class="shield-icon">🛡️</span>
+            <div class="logo-text">
+                <h1>DOH-SHIELD</h1>
+                <p>Client-Side DoH Traffic Morphing Proxy</p>
+            </div>
+        </div>
+        <nav class="tab-nav">
+            <button class="nav-btn active" data-tab="simulation-tab">🧪 Simulation Lab</button>
+            <button class="nav-btn" data-tab="dashboard-tab">📊 Live Proxy Dashboard</button>
+        </nav>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="content-container">
+        
+        <!-- Tab 1: Simulation Lab -->
+        <section id="simulation-tab" class="tab-content active">
+            <div class="grid-layout">
+                <!-- Controls Card -->
+                <div class="glass-panel controls-card">
+                    <h2>Simulation Controls</h2>
+                    <p class="subtitle">Tune privacy bounds and traffic scenarios to calculate morph plans</p>
+                    
+                    <div class="form-group">
+                        <label for="scenario-select">Traffic Scenario Preset</label>
+                        <select id="scenario-select">
+                            <option value="single">Single A-Query (Lightweight)</option>
+                            <option value="burst" selected>Browser Traffic Burst (Medium)</option>
+                            <option value="tunnel">Continuous DNS Tunneling (Heavy Attack)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="label-val">
+                            <label for="epsilon-slider">Privacy Budget (Epsilon &epsilon;)</label>
+                            <span id="epsilon-val" class="badge">1.0</span>
+                        </div>
+                        <input type="range" id="epsilon-slider" min="0.1" max="5.0" step="0.1" value="1.0">
+                        <span class="input-desc">Lower values mean stronger timing privacy but higher delay noise.</span>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="label-val">
+                            <label for="sensitivity-slider">Timing Sensitivity (&Delta;t)</label>
+                            <span id="sensitivity-val" class="badge">0.1s</span>
+                        </div>
+                        <input type="range" id="sensitivity-slider" min="0.01" max="0.5" step="0.01" value="0.1">
+                        <span class="input-desc">Sensitivity of query arrival gaps (scale factor for Laplace noise).</span>
+                    </div>
+
+                    <button id="run-simulation-btn" class="primary-btn">⚡ Run Obfuscation Plan</button>
+                </div>
+
+                <!-- Simulation Results Card -->
+                <div class="glass-panel results-card">
+                    <h2>Simulation Results</h2>
+                    <div class="stats-row">
+                        <div class="stat-box">
+                            <span class="label">Target Cluster</span>
+                            <span id="sim-cluster" class="value text-magenta">--</span>
+                        </div>
+                        <div class="stat-box">
+                            <span class="label">Dummies Injected</span>
+                            <span id="sim-dummies" class="value text-yellow">--</span>
+                        </div>
+                        <div class="stat-box">
+                            <span class="label">Padded Size</span>
+                            <span id="sim-size" class="value">--</span>
+                        </div>
+                        <div class="stat-box">
+                            <span class="label">Overhead</span>
+                            <span id="sim-overhead" class="value text-red">--</span>
+                        </div>
+                        <div class="stat-box">
+                            <span class="label">Attacker Bound</span>
+                            <span id="sim-bound" class="value text-green">--</span>
+                        </div>
+                    </div>
+
+                    <!-- Timeline Chart Wrapper -->
+                    <div class="chart-wrapper">
+                        <canvas id="timelineChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tab 2: Live Proxy Dashboard -->
+        <section id="dashboard-tab" class="tab-content">
+            <div class="live-status-bar">
+                <span class="live-dot animate-pulse"></span>
+                <span class="status-text">Connected to live mitmproxy engine on port 8080</span>
+            </div>
+
+            <!-- KPI Cards Grid -->
+            <div class="kpi-grid">
+                <div class="glass-panel kpi-card">
+                    <span class="kpi-label">Active Connections</span>
+                    <span id="live-active-sessions" class="kpi-val text-cyan">0</span>
+                </div>
+                <div class="glass-panel kpi-card">
+                    <span class="kpi-label">Total Intercepted Queries</span>
+                    <span id="live-total-queries" class="kpi-val">0</span>
+                </div>
+                <div class="glass-panel kpi-card">
+                    <span class="kpi-label">Dummy Queries Injected</span>
+                    <span id="live-total-dummies" class="kpi-val text-yellow">0</span>
+                </div>
+                <div class="glass-panel kpi-card">
+                    <span class="kpi-label">Original Data</span>
+                    <span id="live-original-bytes" class="kpi-val">0.0 KB</span>
+                </div>
+                <div class="glass-panel kpi-card">
+                    <span class="kpi-label">Bandwidth Overhead</span>
+                    <span id="live-overhead-pct" class="kpi-val text-red">0.0%</span>
+                </div>
+                <div class="glass-panel kpi-card">
+                    <span class="kpi-label">Guaranteed Privacy Bound</span>
+                    <span id="live-privacy-bound" class="kpi-val text-green">37.08%</span>
+                </div>
+            </div>
+
+            <!-- History Logs Panel -->
+            <div class="glass-panel table-panel">
+                <h2>Morphed Website Flow History</h2>
+                <p class="subtitle">DNS packet burst sessions intercepted and obfuscated after 2.0s inactivity</p>
+                <div class="table-wrapper">
+                    <table class="history-table">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Requested Domain</th>
+                                <th>Original Queries</th>
+                                <th>Original Size</th>
+                                <th>Assigned Cluster</th>
+                                <th>Dummies Injected</th>
+                                <th>Overhead</th>
+                                <th>Security Bound</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-rows">
+                            <tr>
+                                <td colspan="8" class="empty-row">No sessions captured yet. Browse using Firefox configured to HTTP Proxy 127.0.0.1:8080.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Mathematical Footer -->
+    <footer class="main-footer">
+        <p>Formal Attacker Bound: <strong>P(attack) &le; 1/k_min + e^(-&epsilon;)</strong> where <strong>k_min = 343</strong> (Minimum K-Means Cluster Size) | Privacy Budget <strong>&epsilon; = 1.0</strong></p>
+    </footer>
+
+    <!-- App Logic -->
+    <script src="app.js"></script>
+</body>
+</html>
