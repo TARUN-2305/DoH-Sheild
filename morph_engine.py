@@ -89,6 +89,14 @@ class MorphEngine:
         # Bounded between 0 and 40 queries to avoid network hogging
         num_dummies = min(max(0, num_dummies), 40)
         
+        # Enforce overhead to be strictly less than 300% everywhere
+        total_original = curr_sent_bytes + curr_received_bytes
+        if total_original > 0:
+            # We want: (num_dummies * (target_mode_size + 150) / total_original) * 100 < 300
+            # Which simplifies to: num_dummies * (target_mode_size + 150) < 3.0 * total_original
+            max_allowed = int((3.0 * total_original - 1) / (target_mode_size + 150))
+            num_dummies = min(num_dummies, max(0, max_allowed))
+        
         # Generate DP noised timing gaps
         # Base inter-packet gap of 50ms to match real-time queries
         base_gaps = np.full(max(1, num_dummies), 0.05)
