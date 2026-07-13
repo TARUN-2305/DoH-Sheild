@@ -15,7 +15,7 @@ Remove-Item -Path stats.json, stats.json.tmp, mitm_out.log, mitm_err.log, resolv
 
 # Run verification tests on core components before starting the proxy
 Write-Host "[*] Running component verification checks..." -ForegroundColor Cyan
-& ".\venv\Scripts\python.exe" verify_shield.py
+& ".\venv\Scripts\python.exe" useful_tools/verify_shield.py
 if ($LASTEXITCODE -ne 0) {
     Write-Host "[!] Component verification check failed! Please review feature_extractor.py or morph_engine.py." -ForegroundColor Red
     exit 1
